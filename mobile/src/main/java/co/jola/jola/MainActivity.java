@@ -1,12 +1,9 @@
 package co.jola.jola;
 
-
-import android.Manifest;
 import android.annotation.TargetApi;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
-import android.content.pm.PackageManager;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
@@ -36,6 +33,12 @@ import co.jola.jola.apis.YelpAPI;
 
 public class MainActivity extends Activity implements OnClickListener {
 
+    private enum Status {
+        NULL,
+        UBER_PICKUP_RESPONSE,
+        UBER_DEST_RESPONSE
+    }
+
     private TextView mText;
     private SpeechRecognizer sr;
     private static final String TAG = "Testing voice";
@@ -44,6 +47,8 @@ public class MainActivity extends Activity implements OnClickListener {
     private String userRequest;
     private LocationManager locationManager;
     private Location userLocation;
+    private API invoked;
+    private Status status;
 
     @TargetApi(Build.VERSION_CODES.M)
     @Override
@@ -61,6 +66,7 @@ public class MainActivity extends Activity implements OnClickListener {
         }
         );
         this.userLocation = null;
+        this.status = Status.NULL;
 
         // set up location monitoring
         // Acquire a reference to the system Location Manager
@@ -81,16 +87,16 @@ public class MainActivity extends Activity implements OnClickListener {
         };
 
         // Register the listener with the Location Manager to receive location updates
-        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            // TODO: Consider calling
-            //    public void requestPermissions(@NonNull String[] permissions, int requestCode)
-            // here to request the missing permissions, and then overriding
-            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-            //                                          int[] grantResults)
-            // to handle the case where the user grants the permission. See the documentation
-            // for Activity#requestPermissions for more details.
-            return;
-        }
+//        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+//            // TODO: Consider calling
+//            //    public void requestPermissions(@NonNull String[] permissions, int requestCode)
+//            // here to request the missing permissions, and then overriding
+//            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
+//            //                                          int[] grantResults)
+//            // to handle the case where the user grants the permission. See the documentation
+//            // for Activity#requestPermissions for more details.
+//            return;
+//        }
         locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 0, 0, locationListener);
 
         sr = SpeechRecognizer.createSpeechRecognizer(this);
@@ -99,7 +105,7 @@ public class MainActivity extends Activity implements OnClickListener {
         intent.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, "co.jola.jola");
         intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 0);
         sr.setRecognitionListener(new listener());
-        sr.startListening(intent);
+//        sr.startListening(intent);
         userRequest = "";
     }
 
@@ -108,6 +114,7 @@ public class MainActivity extends Activity implements OnClickListener {
         super.onPause();
 
         sr.stopListening();
+        Log.d(TAG, "activity paused - stop listening");
     }
 
     @Override
@@ -115,55 +122,87 @@ public class MainActivity extends Activity implements OnClickListener {
         super.onResume();
 
         sr.startListening(intent);
+        Log.d(TAG, "activity resumed - listening");
     }
 
     class listener implements RecognitionListener {
         public void onReadyForSpeech(Bundle params) {
+            Log.d(TAG, "listener - ready for speech");
         }
 
         public void onBeginningOfSpeech() {
+            Log.d(TAG, "listener - beginning of speech");
         }
 
         public void onRmsChanged(float rmsdB) {
-//            if(jolaspeaks.isSpeaking()){
-//                Log.i(TAG, "jola is sleepy");
-//            }
-            //Log.d(TAG, "onRmsChanged");
         }
 
         public void onBufferReceived(byte[] buffer) {
         }
 
         public void onEndOfSpeech() {
+            Log.d(TAG, "listener - hit end of speech");
         }
 
         public void onError(int error) {
-            Log.d(TAG, "error " + error);
+            switch(error) {
+                case SpeechRecognizer.ERROR_NO_MATCH:
+                    Log.d(TAG, "error: No recognition result matched");
+                    break;
+                case SpeechRecognizer.ERROR_RECOGNIZER_BUSY:
+                    Log.d(TAG, "error: RecognitionService busy");
+                    break;
+                case SpeechRecognizer.ERROR_SPEECH_TIMEOUT:
+                    Log.d(TAG, "error: no speech input");
+                    break;
+                case SpeechRecognizer.ERROR_AUDIO:
+                    Log.d(TAG, "error: Audio recording error");
+                    break;
+                case SpeechRecognizer.ERROR_CLIENT:
+                    Log.d(TAG, "error: other client side errors");
+                    break;
+            }
+
             mText.setText("error " + error);
         }
 
         private void reply(String spoken) {
             sr.stopListening();
+            Log.d(TAG, "jola is not listening");
+
             spoken = spoken.toLowerCase();
             Log.d(TAG, "Got the words: " + spoken);
             if (spoken.equals("hello")) {
                 jolaspeaks.speak("Yola! How can I help you today?", TextToSpeech.QUEUE_FLUSH, null);
             } else if (spoken.equals("shut up")) {
                 System.exit(0);
+            } else if (status == Status.UBER_PICKUP_RESPONSE) {
+
+                Log.d(TAG, "uber class: " + invoked.getClass());
+
+                // TODO - here spoken is an address (hopefully).
+                ((UberAPI)invoked).setDestinationAddress(spoken);
+
+                // fuck it ship it
+                startActivity(invoked.execute());
+
             } else if (spoken.equals("yes")) {
-                Intent i = new Intent();
+                Intent i = null;
 
                 // -- UBER
                 if (UberAPI.UberMatch(userRequest)) {
-                    UberAPI uber = new UberAPI(MainActivity.this.getApplicationContext());
+                    UberAPI uber = new UberAPI(MainActivity.this.getApplicationContext(), userRequest);
 
                     // TODO - if userLocation is null, use last known location instead
                     uber.setPickupLocation(userLocation.getLatitude(), userLocation.getLongitude());
 
-                    // TODO - ask user for destination
-                    // TODO - handle if user wants estimation
+                    invoked = uber;
 
-                    i = uber.execute();
+                    // flag
+                    status = Status.UBER_PICKUP_RESPONSE;
+                    jolaspeaks.speak("Where would you like to go?", TextToSpeech.QUEUE_FLUSH, null);
+
+                    // TODO - handle if user wants estimation
                 }
 
                 // -- Braintree
@@ -191,6 +230,7 @@ public class MainActivity extends Activity implements OnClickListener {
             }
             while(jolaspeaks.isSpeaking());
             sr.startListening(intent);
+            Log.d(TAG, "jola is listening");
         }
 
         public void onResults(Bundle results) {
@@ -199,8 +239,16 @@ public class MainActivity extends Activity implements OnClickListener {
             String detected = data.get(0).toString();
             reply(detected);
         }
-        public void onPartialResults(Bundle partialResults) {}
-        public void onEvent(int eventType, Bundle params) {}
+
+        @Override
+        public void onPartialResults(Bundle partialResults) {
+            Log.d(TAG, "got partial result");
+        }
+
+        @Override
+        public void onEvent(int eventType, Bundle params) {
+            Log.d(TAG, "got an event?");
+        }
     }
 
     public void onClick(View v) {

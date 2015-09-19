@@ -46,11 +46,11 @@ public class TextClassifier {
         if(UberAPI.UberMatch(inputText)) {
             Log.d(TAG, "Uber is called");
             // TODO - call Uber API
-            UberAPI uber = new UberAPI(appContext);
+            UberAPI uber = new UberAPI(appContext, inputText);
 
             returnAction = uber.execute();
         }
-        else{
+        else {
             if(inputText.contains("near") || inputText.contains("at")) {
 
                 HashSet<String> keys = new HashSet<String>();

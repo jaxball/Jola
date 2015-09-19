@@ -21,13 +21,18 @@ public class UberAPI implements API {
     // coordinates of where they are going
     private double destinationLatitude;
     private double destinationLongitude;
+    private String destinationAddress;
+    private boolean useDestinationCoordinates;
 
     // App Context
     private Context context;
 
+    private boolean pickupIsSet;
+    private boolean destinationIsSet;
+
     // TODO - integrate Uber API
 
-    public UberAPI(Context c) {
+    public UberAPI(Context c, String data) {
         this.context = c;
 
         // set some default values
@@ -39,16 +44,45 @@ public class UberAPI implements API {
         // University of Waterloo
         this.destinationLatitude = 43.4689;
         this.destinationLongitude = 80.5400;
+        this.destinationAddress = "";
+        this.useDestinationCoordinates = false;
+
+        this.pickupIsSet = false;
+        this.destinationIsSet = false;
+
+        // the user already specified the location
+        if(data.contains("to")) {
+            String location = data.split("to")[0];
+
+            // now need to geocode the location since it's probably an address
+        }
     }
 
     public void setPickupLocation(double lat, double lon) {
         this.pickupLatitude = lat;
         this.pickupLongitude = lon;
+        this.pickupIsSet = true;
     }
 
-    public void setDestinationLocation(double lat, double lon) {
+    public void setDestinationLocationCoordinates(double lat, double lon) {
         this.destinationLatitude = lat;
         this.destinationLongitude = lon;
+        this.destinationIsSet = true;
+        this.useDestinationCoordinates = true;
+    }
+
+    public void setDestinationAddress(String dest) {
+        this.destinationAddress = dest;
+        this.useDestinationCoordinates = false;
+        this.destinationIsSet = true;
+    }
+
+    public boolean isPickupSet() {
+        return this.pickupIsSet;
+    }
+
+    public boolean isDestinationIsSet() {
+        return this.destinationIsSet;
     }
 
     private String getURI() {
@@ -60,11 +94,16 @@ public class UberAPI implements API {
         sb.append("&pickup[longitude]=");
         sb.append(this.pickupLongitude);
 
-        sb.append("&dropoff[latitude]=");
-        sb.append(this.destinationLatitude);
+        if(this.useDestinationCoordinates) {
+            sb.append("&dropoff[latitude]=");
+            sb.append(this.destinationLatitude);
 
-        sb.append("&dropoff[longitude]=");
-        sb.append(this.destinationLongitude);
+            sb.append("&dropoff[longitude]=");
+            sb.append(this.destinationLongitude);
+        } else {
+            sb.append("&dropoff[formatted_address]=");
+            sb.append(this.destinationAddress);
+        }
 
         sb.append("&client_id=");
         sb.append(CLIENT_ID);
@@ -79,7 +118,7 @@ public class UberAPI implements API {
     public Intent execute() {
         try {
             PackageManager pm = context.getPackageManager();
-            pm.getPackageInfo("com.ubercab", PackageManager.GET_ACTIVITIES);
+            pm.getPackageInfo("co.jola.jola", PackageManager.GET_ACTIVITIES);
             Intent intent = new Intent(Intent.ACTION_VIEW);
             intent.setData(Uri.parse(getURI()));
             return intent;
