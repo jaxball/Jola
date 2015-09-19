@@ -19,6 +19,10 @@ import java.util.Locale;
 
 import android.util.Log;
 
+import com.firebase.client.Firebase;
+
+//import com.firebase.client.Firebase;
+
 public class MainActivity extends Activity  implements OnClickListener {
 
     private TextView mText;
@@ -31,6 +35,8 @@ public class MainActivity extends Activity  implements OnClickListener {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        Firebase.setAndroidContext(this);
+        Firebase ref = new Firebase("https://jola.firebaseio.com/");
         setContentView(R.layout.activity_main);
         //Button speakButton = (Button) findViewById(R.id.btn_speak);
         mText = (TextView) findViewById(R.id.textView1);
