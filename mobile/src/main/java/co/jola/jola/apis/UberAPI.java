@@ -8,7 +8,11 @@ import android.net.Uri;
 /**
  * Created by jasonlin on 9/19/15.
  */
-public class UberAPI {
+public class UberAPI implements API {
+
+    private static String BASE_URI = "uber://?action=setPickup&";
+    private static String MOBILE_URL = "https://m.uber.com/sign-up";
+    private static String CLIENT_ID = "nrGE4PWCOa6o8VdGZR_zvV7l99rWNvs5";
 
     // coordinates of where the user is
     private double pickupLatitude;
@@ -18,23 +22,79 @@ public class UberAPI {
     private double destinationLatitude;
     private double destinationLongitude;
 
-    // TODO - integreate Uber API
+    // App Context
+    private Context context;
 
-    public Intent openTest(Context context) {
+    // TODO - integrate Uber API
+
+    public UberAPI(Context c) {
+        this.context = c;
+
+        // set some default values
+
+        // Pearson International Airport
+        this.pickupLatitude = 43.6767;
+        this.pickupLongitude = 79.6306;
+
+        // University of Waterloo
+        this.destinationLatitude = 43.4689;
+        this.destinationLongitude = 80.5400;
+    }
+
+    public void setPickupLocation(double lat, double lon) {
+        this.pickupLatitude = lat;
+        this.pickupLongitude = lon;
+    }
+
+    public void setDestinationLocation(double lat, double lon) {
+        this.destinationLatitude = lat;
+        this.destinationLongitude = lon;
+    }
+
+    private String getURI() {
+        StringBuilder sb = new StringBuilder(BASE_URI);
+
+        sb.append("pickup[latitude]=");
+        sb.append(this.pickupLatitude);
+
+        sb.append("&pickup[longitude]=");
+        sb.append(this.pickupLongitude);
+
+        sb.append("&dropoff[latitude]=");
+        sb.append(this.destinationLatitude);
+
+        sb.append("&dropoff[longitude]=");
+        sb.append(this.destinationLongitude);
+
+        sb.append("&client_id=");
+        sb.append(CLIENT_ID);
+
+        return sb.toString();
+    }
+
+    private String getURL() {
+        return new StringBuilder(MOBILE_URL).append("?client_id=").append(CLIENT_ID).toString();
+    }
+
+    public Intent execute() {
         try {
             PackageManager pm = context.getPackageManager();
             pm.getPackageInfo("com.ubercab", PackageManager.GET_ACTIVITIES);
-            String uri =
-                    "uber://?action=setPickup&pickup[latitude]=37.775818&pickup[longitude]=-122.418028&client_id=nrGE4PWCOa6o8VdGZR_zvV7l99rWNvs5";
             Intent intent = new Intent(Intent.ACTION_VIEW);
-            intent.setData(Uri.parse(uri));
+            intent.setData(Uri.parse(getURI()));
             return intent;
         } catch (PackageManager.NameNotFoundException e) {
             // No Uber app! Open mobile website.
-            String url = "https://m.uber.com/sign-up?client_id=YOUR_CLIENT_ID";
             Intent i = new Intent(Intent.ACTION_VIEW);
-            i.setData(Uri.parse(url));
+            i.setData(Uri.parse(getURL()));
             return i;
         }
+    }
+
+    public static boolean UberMatch(String input) {
+        input = input.toLowerCase();
+
+        // TODO - fuzzy string matching
+        return input.contains("uber");
     }
 }
