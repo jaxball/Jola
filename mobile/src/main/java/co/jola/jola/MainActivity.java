@@ -169,11 +169,15 @@ public class MainActivity extends Activity implements OnClickListener {
                 // -- Braintree
                 else if(BraintreeAPI.BraintreeMatch(userRequest)) {
                     // do braintree stuff
+                    BraintreeAPI braintree = new BraintreeAPI();
+                    i = braintree.execute();
                 }
 
                 // -- Yelp
                 else if(YelpAPI.YelpMatch(userRequest)) {
                     // do yelp stuff
+                    YelpAPI yelp = new YelpAPI();
+                    i = yelp.execute();
                 }
 
                 if(i != null) {
