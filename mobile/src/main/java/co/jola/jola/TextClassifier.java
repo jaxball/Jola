@@ -30,28 +30,37 @@ public class TextClassifier {
     }
 
     public void parseText(String inputText) {
+        Log.d(TAG, inputText);
         if(inputText.contains("uber")) {
             Log.d(TAG, "Uber is called");
             // TODO - call Uber API
-            ref.child("yelp").setValue();
+            ref.child("uber").setValue("");
             returnAction = new UberAPI().openTest(appContext);
         }
-        else {
-            HashSet<String> keys = new HashSet<String>();
-            keys.add("food");
-            keys.add("eat");
-            keys.add("dinner");
-            boolean abtFood = false;
-            for (String key : keys) {
-                if (inputText.contains(key)) {
-                    abtFood = true;
-                    // TODO write to firebase
-                    ref.child("yelp").setValue(keys);
-                    //TODO search for food place
+        else{
+            if(inputText.contains("near") || inputText.contains("at")) {
+
+                HashSet<String> keys = new HashSet<String>();
+                keys.add("food");
+                keys.add("eat");
+                keys.add("dinner");
+                keys.add("yelp");
+                boolean abtFood = false;
+                HashSet<String> foundkeys = new HashSet<String>();
+                for (String key : keys) {
+                    if (inputText.contains(key)) {
+                        abtFood = true;
+                        Log.d(TAG, "found key " + key);
+
+                        foundkeys.add(key);
+                        //TODO search for food place
+                    }
                 }
-            }
-            if(!abtFood){
-                Log.d(TAG, "Did not recognize anything");
+                if (abtFood) {
+                    ref.child("yelp").setValue(foundkeys);
+                } else {
+                    Log.d(TAG, "Did not recognize anything");
+                }
             }
         }
     }
