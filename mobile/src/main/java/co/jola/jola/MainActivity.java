@@ -105,7 +105,7 @@ public class MainActivity extends Activity implements OnClickListener, Connectio
         Firebase ref = new Firebase("https://jola.firebaseio.com/");
         setContentView(R.layout.activity_main);
 
-         mGoogleApiClient = new GoogleApiClient.Builder(this)
+        mGoogleApiClient = new GoogleApiClient.Builder(this)
                 .addConnectionCallbacks(this)
                 .addOnConnectionFailedListener(this)
                 .addApi(LocationServices.API)
@@ -148,7 +148,7 @@ public class MainActivity extends Activity implements OnClickListener, Connectio
     }
 
     private void reply(String spoken) {
-        sr.stopListening();
+        sr.destroy();
         Log.d(TAG, "jola is not listening");
         userText.setText(spoken);
         spoken = spoken.toLowerCase();
@@ -226,6 +226,8 @@ public class MainActivity extends Activity implements OnClickListener, Connectio
         Log.e(TAG, "about to go into the while loop");
         while (jolaspeaks.isSpeaking()) ;
         Log.e(TAG, "about to start listening again");
+        sr = SpeechRecognizer.createSpeechRecognizer(MainActivity.this);
+        sr.setRecognitionListener(new listener());
         sr.startListening(intent);
         Log.d(TAG, "jola is listening");
     }
