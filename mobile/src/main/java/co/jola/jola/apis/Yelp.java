@@ -45,13 +45,13 @@ public class Yelp {
      * @return JSON string response
      */
     public String search(String term, double latitude, double longitude) {
-        /*OAuthRequest request = new OAuthRequest(Verb.GET, "http://api.yelp.com/v2/search");
+        OAuthRequest request = new OAuthRequest(Verb.GET, "http://api.yelp.com/v2/search");
         request.addQuerystringParameter("term", term);
-        request.addQuerystringParameter("ll", latitude + "," + longitude);
+        request.addQuerystringParameter("location", "toronto");
+        //request.addQuerystringParameter("ll", latitude + "," + longitude);
         this.service.signRequest(this.accessToken, request);
         Response response = request.send();
         String s = response.toString();
-        return response.getBody();*/
-        return "";
+        return response.getBody();
     }
 }

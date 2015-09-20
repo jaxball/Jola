@@ -18,6 +18,7 @@ import android.view.View.OnClickListener;
 import android.speech.RecognitionListener;
 import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
+import android.widget.EditText;
 import android.widget.TextView;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
@@ -29,12 +30,16 @@ import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.common.api.GoogleApiClient.ConnectionCallbacks;
 import com.google.android.gms.common.api.GoogleApiClient.OnConnectionFailedListener;
 import com.google.android.gms.location.LocationServices;
+
+import org.json.JSONException;
+
 import co.jola.jola.apis.API;
 import co.jola.jola.apis.API_Keys;
 import co.jola.jola.apis.BraintreeAPI;
 import co.jola.jola.apis.UberAPI;
 import co.jola.jola.apis.Yelp;
 import co.jola.jola.apis.YelpAPI;
+import co.jola.jola.apis.YelpParser;
 
 public class MainActivity extends Activity implements OnClickListener, ConnectionCallbacks, OnConnectionFailedListener {
 
@@ -71,9 +76,16 @@ public class MainActivity extends Activity implements OnClickListener, Connectio
         UBER_DEST_RESPONSE
     }
 
-    private TextView mText;
+    private TextView yolaText;
+    private EditText userText;
     private SpeechRecognizer sr;
     private static final String TAG = "Testing voice";
+    private static final String HELLO = "hello";
+    private static final String SHUT_UP = "shut up";
+    private static final String YOLA = "Yola! How can I help you today?";
+    private static final String REPEAT = "Please repeat your request.";
+    private static final String YES = "yes";
+    private static final String NO = "no";
     private Intent intent;
     private TextToSpeech jolaspeaks;
     private String userRequest;
@@ -99,7 +111,8 @@ public class MainActivity extends Activity implements OnClickListener, Connectio
                 .addApi(LocationServices.API)
                 .build();
 
-        mText = (TextView) findViewById(R.id.textView1);
+        yolaText = (TextView) findViewById(R.id.textView);
+        userText = (EditText) findViewById(R.id.textView2);
         this.userLocation = null;
         this.status = Status.NULL;
         intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
@@ -128,21 +141,89 @@ public class MainActivity extends Activity implements OnClickListener, Connectio
                 jolaspeaks.setLanguage(Locale.US);
             }
         });
-        if (sr != null) {
-            sr.cancel();
-            sr.destroy();
-            sr = null;
-        }
-        mText.post(new Runnable() {
-            @Override
-            public void run() {
-                sr = SpeechRecognizer.createSpeechRecognizer(MainActivity.this);
-                sr.setRecognitionListener(new listener());
-                sr.startListening(intent);
-            }
-        });
-
+        sr = SpeechRecognizer.createSpeechRecognizer(MainActivity.this);
+        sr.setRecognitionListener(new listener());
+        sr.startListening(intent);
         Log.d(TAG, "activity resumed - listening");
+    }
+
+    private void reply(String spoken) {
+        sr.stopListening();
+        Log.d(TAG, "jola is not listening");
+        userText.setText(spoken);
+        spoken = spoken.toLowerCase();
+        Log.d(TAG, "Got the words: " + spoken);
+        if (spoken.equals(HELLO)) {
+            jolaspeaks.speak(YOLA, TextToSpeech.QUEUE_FLUSH, null);
+            yolaText.setText(YOLA);
+        } else if (spoken.equals(SHUT_UP)) {
+            System.exit(0);
+        } else if (status == Status.UBER_PICKUP_RESPONSE) {
+            Log.d(TAG, "destination: " + spoken);
+            // TODO - here spoken is an address (hopefully).
+            ((UberAPI)invoked).setDestinationAddress(spoken);
+
+            // fuck it ship it
+            startActivity(invoked.execute());
+
+        } else if (spoken.equals(YES)) {
+            Intent i = null;
+
+            // -- UBER
+            if (UberAPI.UberMatch(userRequest)) {
+                UberAPI uber = new UberAPI(MainActivity.this.getApplicationContext(), userRequest);
+
+                // TODO - if userLocation is null, use last known location instead
+                uber.setPickupLocation(userLocation.getLatitude(), userLocation.getLongitude());
+
+                Log.d(TAG, "user location: (" + userLocation.getLatitude() + ", " + userLocation.getLongitude() + ")");
+
+                invoked = uber;
+
+                // flag
+                status = Status.UBER_PICKUP_RESPONSE;
+                jolaspeaks.speak("Where would you like to go?", TextToSpeech.QUEUE_FLUSH, null);
+                yolaText.setText("Where would you like to go?");
+                // TODO - handle if user wants estimation
+                if(uber.isFareRequest()) {
+                    uber.execute();
+                }
+            }
+
+            // -- Braintree
+            else if (BraintreeAPI.BraintreeMatch(userRequest)) {
+                // do braintree stuff
+                BraintreeAPI braintree = new BraintreeAPI();
+                i = braintree.execute();
+            }
+
+            // -- Yelp
+            else if (YelpAPI.YelpMatch(userRequest)) {
+                Log.d(TAG, "Looking for food...");
+                API_Keys api_keys = new API_Keys();
+                Log.i(TAG, "location is -----" +userLocation);
+                new MyTask(MainActivity.this, userLocation, api_keys).execute();
+                Log.e(TAG, "before that if statement");
+
+                // i always false
+                if (i != null) {
+                    Log.e(TAG, "starting an Activity??");
+                    startActivity(i);
+                }
+            }
+        } else if (spoken.equals(NO)) {
+            jolaspeaks.speak(REPEAT, TextToSpeech.QUEUE_FLUSH, null);
+            yolaText.setText(REPEAT);
+        } else {
+            jolaspeaks.speak("I heard " + spoken + ", is that correct?", TextToSpeech.QUEUE_FLUSH, null);
+            yolaText.setText("I heard " + spoken + ", is that correct?");
+            userRequest = spoken;
+        }
+        Log.e(TAG, "about to go into the while loop");
+        while (jolaspeaks.isSpeaking()) ;
+        Log.e(TAG, "about to start listening again");
+        sr.startListening(intent);
+        Log.d(TAG, "jola is listening");
     }
 
     class listener implements RecognitionListener {
@@ -182,86 +263,6 @@ public class MainActivity extends Activity implements OnClickListener, Connectio
                     Log.d(TAG, "error: other client side errors");
                     break;
             }
-
-            mText.setText("error " + error);
-        }
-
-        private void reply(String spoken) {
-            sr.stopListening();
-            Log.d(TAG, "jola is not listening");
-
-            spoken = spoken.toLowerCase();
-            Log.d(TAG, "Got the words: " + spoken);
-            if (spoken.equals("hello")) {
-                jolaspeaks.speak("Yola! How can I help you today?", TextToSpeech.QUEUE_FLUSH, null);
-            } else if (spoken.equals("shut up")) {
-                System.exit(0);
-            } else if (status == Status.UBER_PICKUP_RESPONSE) {
-
-                Log.d(TAG, "destination: " + spoken);
-
-                // TODO - here spoken is an address (hopefully).
-                ((UberAPI)invoked).setDestinationAddress(spoken);
-
-                // fuck it ship it
-                startActivity(invoked.execute());
-
-            } else if (spoken.equals("yes")) {
-                Intent i = null;
-
-                // -- UBER
-                if (UberAPI.UberMatch(userRequest)) {
-                    UberAPI uber = new UberAPI(MainActivity.this.getApplicationContext(), userRequest);
-
-                    // TODO - if userLocation is null, use last known location instead
-                    uber.setPickupLocation(userLocation.getLatitude(), userLocation.getLongitude());
-
-                    Log.d(TAG, "user location: (" + userLocation.getLatitude() + ", " + userLocation.getLongitude() + ")");
-
-                    invoked = uber;
-
-                    // flag
-                    status = Status.UBER_PICKUP_RESPONSE;
-                    jolaspeaks.speak("Where would you like to go?", TextToSpeech.QUEUE_FLUSH, null);
-
-                    // TODO - handle if user wants estimation
-                    if(uber.isFareRequest()) {
-                        uber.execute();
-                    }
-                }
-
-                // -- Braintree
-                else if (BraintreeAPI.BraintreeMatch(userRequest)) {
-                    // do braintree stuff
-                    BraintreeAPI braintree = new BraintreeAPI();
-                    i = braintree.execute();
-                }
-
-                // -- Yelp
-                else if (YelpAPI.YelpMatch(userRequest)) {
-                    Log.d(TAG, "Looking for food...");
-                    API_Keys api_keys = new API_Keys();
-                    Log.i(TAG, "location is -----" +userLocation);
-                  new MyTask(MainActivity.this, userLocation, api_keys).execute();
-                    Log.e(TAG, "before that if statement");
-
-                    // i always false
-                    if (i != null) {
-                        Log.e(TAG, "starting an Activity??");
-                        startActivity(i);
-                    }
-                }
-            } else if (spoken.equals("no")) {
-                    jolaspeaks.speak("Please repeat your request.", TextToSpeech.QUEUE_FLUSH, null);
-            } else {
-                    jolaspeaks.speak("I heard " + spoken + ", is that correct?", TextToSpeech.QUEUE_FLUSH, null);
-                    userRequest = spoken;
-            }
-            Log.e(TAG, "about to go into the while loop");
-            while (jolaspeaks.isSpeaking()) ;
-            Log.e(TAG, "about to start listening again");
-            sr.startListening(intent);
-            Log.d(TAG, "jola is listening");
         }
 
         public void onResults(Bundle results) {
@@ -283,8 +284,19 @@ public class MainActivity extends Activity implements OnClickListener, Connectio
     }
 
     public void onClick(View v) {
-        if (v.getId() == R.id.btn_speak) {
-            Log.i("in OnClick","listening");
+        if (v.getId() == R.id.snooze_wakeup) {
+            Log.i("in OnClick","snooze wakeup");
+            if(sr == null){
+                // assuming destroyed
+                Log.i(TAG,"sr was null........");
+                sr = SpeechRecognizer.createSpeechRecognizer(MainActivity.this);
+                sr.setRecognitionListener(new listener());
+                sr.startListening(intent);
+            } else{
+                sr.destroy();
+            }
+        } else if (v.getId() == R.id.enter){
+            reply(userText.getText().toString());
         }
     }
 
@@ -326,14 +338,18 @@ public class MainActivity extends Activity implements OnClickListener, Connectio
         protected String doInBackground(Void... voids) {
             Yelp yelp = new Yelp(mKeys.getYelpConsumerKey(), mKeys.getYelpConsumerSecret(),
               mKeys.getYelpToken(), mKeys.getYelpTokenSecret());
+            if(mLocation == null){
+                Log.i(TAG,"location was null!!!!!!!");
+                return yelp.search("burritos", 43.6767, 79.6306);
+            }
             return yelp.search("burritos", mLocation.getLatitude(), mLocation.getLongitude());
         }
 
         @Override
         protected void onPostExecute(String s) {
             super.onPostExecute(s);
-
-            /*YelpParser yParser = new YelpParser();
+            Log.d(TAG, "got response.............." +s);
+            YelpParser yParser = new YelpParser();
             Log.d(TAG, "Enters parser...");
             yParser.setResponse(s);
             try {
@@ -349,7 +365,7 @@ public class MainActivity extends Activity implements OnClickListener, Connectio
             String mobile_url = yParser.getBusinessMobileURL(k);
             String rating_url = yParser.getRatingURL(k);
             String b_name = yParser.getBusinessName(k);
-            Log.d(TAG, "Yelp result: " + mobile_url + rating_url + b_name);*/
+            Log.d(TAG, "Yelp result: " + mobile_url + rating_url + b_name);
         }
     }
 }
