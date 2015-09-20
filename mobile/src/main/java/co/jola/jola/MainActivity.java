@@ -198,7 +198,7 @@ public class MainActivity extends Activity implements OnClickListener, Connectio
                 System.exit(0);
             } else if (status == Status.UBER_PICKUP_RESPONSE) {
 
-                Log.d(TAG, "uber class: " + invoked.getClass());
+                Log.d(TAG, "destination: " + spoken);
 
                 // TODO - here spoken is an address (hopefully).
                 ((UberAPI)invoked).setDestinationAddress(spoken);
@@ -216,6 +216,8 @@ public class MainActivity extends Activity implements OnClickListener, Connectio
                     // TODO - if userLocation is null, use last known location instead
                     uber.setPickupLocation(userLocation.getLatitude(), userLocation.getLongitude());
 
+                    Log.d(TAG, "user location: (" + userLocation.getLatitude() + ", " + userLocation.getLongitude() + ")");
+
                     invoked = uber;
 
                     // flag
@@ -223,6 +225,9 @@ public class MainActivity extends Activity implements OnClickListener, Connectio
                     jolaspeaks.speak("Where would you like to go?", TextToSpeech.QUEUE_FLUSH, null);
 
                     // TODO - handle if user wants estimation
+                    if(uber.isFareRequest()) {
+                        uber.execute();
+                    }
                 }
 
                 // -- Braintree
