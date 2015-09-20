@@ -36,6 +36,7 @@ import org.json.JSONException;
 import co.jola.jola.apis.API;
 import co.jola.jola.apis.API_Keys;
 import co.jola.jola.apis.BraintreeAPI;
+import co.jola.jola.apis.SpotifyAPI;
 import co.jola.jola.apis.UberAPI;
 import co.jola.jola.apis.Yelp;
 import co.jola.jola.apis.YelpAPI;
@@ -86,6 +87,7 @@ public class MainActivity extends Activity implements OnClickListener, Connectio
     private static final String REPEAT = "Please repeat your request.";
     private static final String YES = "yes";
     private static final String NO = "no";
+    private static final String SPOTIFY = "spotify";
     private Intent intent;
     private TextToSpeech jolaspeaks;
     private String userRequest;
@@ -210,6 +212,10 @@ public class MainActivity extends Activity implements OnClickListener, Connectio
                     Log.e(TAG, "starting an Activity??");
                     startActivity(i);
                 }
+            } else if (SpotifyAPI.SpotifyMatch(userRequest)) {
+                Log.d(TAG, "spotify match");
+                SpotifyAPI spotify = new SpotifyAPI();
+                startActivity(spotify.getIntent());
             }
         } else if (spoken.equals(NO)) {
             jolaspeaks.speak(REPEAT, TextToSpeech.QUEUE_FLUSH, null);
