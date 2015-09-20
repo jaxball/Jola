@@ -32,8 +32,8 @@ public class Yelp {
      * @param tokenSecret Token secret
      */
     public Yelp(String consumerKey, String consumerSecret, String token, String tokenSecret) {
-        //this.service = new ServiceBuilder().provider(YelpApi2.class).apiKey(consumerKey).apiSecret(consumerSecret).build();
-        //this.accessToken = new Token(token, tokenSecret);
+        this.service = new ServiceBuilder().provider(YelpApi2.class).apiKey(consumerKey).apiSecret(consumerSecret).build();
+        this.accessToken = new Token(token, tokenSecret);
     }
 
     /**
