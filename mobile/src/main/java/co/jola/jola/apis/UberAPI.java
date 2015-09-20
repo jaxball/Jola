@@ -171,9 +171,9 @@ public class UberAPI implements API {
 
     public Intent execute() {
 
-        if(!this.useDestinationCoordinates) {
-            new GeocoderTask().execute(this.destinationAddress);
-        }
+//        if(!this.useDestinationCoordinates) {
+//            new GeocoderTask().execute(this.destinationAddress);
+//        }
 
         if(this.isFareRequest) {
             ConnectivityManager connMgr = (ConnectivityManager)this.context.getSystemService(Context.CONNECTIVITY_SERVICE);

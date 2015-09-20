@@ -2,8 +2,10 @@ package co.jola.jola;
 
 import android.annotation.TargetApi;
 import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
 import android.location.Location;
+import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.AsyncTask;
 import android.os.Build;
@@ -111,6 +113,26 @@ public class MainActivity extends Activity implements OnClickListener, Connectio
                 .addApi(LocationServices.API)
                 .build();
 
+        // set up location monitoring
+        // Acquire a reference to the system Location Manager
+        this.locationManager = (LocationManager) this.getSystemService(Context.LOCATION_SERVICE);
+
+        // Define a listener that responds to location updates
+        LocationListener locationListener = new LocationListener() {
+            public void onLocationChanged(Location location) {
+                // Called when a new location is found by the network location provider.
+                MainActivity.this.userLocation = location;
+            }
+
+            public void onStatusChanged(String provider, int status, Bundle extras) {}
+
+            public void onProviderEnabled(String provider) {}
+
+            public void onProviderDisabled(String provider) {}
+        };
+
+        locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 0, 0, locationListener);
+
         yolaText = (TextView) findViewById(R.id.textView);
         userText = (EditText) findViewById(R.id.textView2);
         this.userLocation = null;
@@ -173,8 +195,20 @@ public class MainActivity extends Activity implements OnClickListener, Connectio
             if (UberAPI.UberMatch(userRequest)) {
                 UberAPI uber = new UberAPI(MainActivity.this.getApplicationContext(), userRequest);
 
+                Location loc;
                 // TODO - if userLocation is null, use last known location instead
-                uber.setPickupLocation(userLocation.getLatitude(), userLocation.getLongitude());
+                if(userLocation == null) {
+                    loc = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+                    if (loc != null) {
+                        double old_latitude=loc.getLatitude();
+                        double old_longitude=loc.getLongitude();
+                        Log.d("old","lat  :  " + old_latitude);
+                        Log.d("old","long :  " + old_longitude);
+                    }
+                } else {
+                    loc = userLocation;
+                }
+                uber.setPickupLocation(loc.getLatitude(), loc.getLongitude());
 
                 Log.d(TAG, "user location: (" + userLocation.getLatitude() + ", " + userLocation.getLongitude() + ")");
 
