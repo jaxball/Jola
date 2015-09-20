@@ -246,8 +246,10 @@ public class MainActivity extends Activity implements OnClickListener, Connectio
                 }
             } else if (SpotifyAPI.SpotifyMatch(userRequest)) {
                 Log.d(TAG, "spotify match");
-                SpotifyAPI spotify = new SpotifyAPI();
-                startActivity(spotify.getIntent());
+                Intent intent = new Intent(this, SpotifyAPI.class);
+//                SpotifyAPI spotify = new SpotifyAPI();
+//                startActivity(spotify.getIntent());
+                startActivity(intent);
             }
         } else if (spoken.equals(NO)) {
             jolaspeaks.speak(REPEAT, TextToSpeech.QUEUE_FLUSH, null);
