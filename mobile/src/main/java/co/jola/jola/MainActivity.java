@@ -7,6 +7,7 @@ import android.content.Intent;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
+import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
 import android.speech.tts.TextToSpeech;
@@ -18,20 +19,51 @@ import android.speech.RecognitionListener;
 import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
 import android.widget.TextView;
-
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Locale;
-
 import android.util.Log;
-
 import com.firebase.client.Firebase;
-
+import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.api.GoogleApiClient;
+import com.google.android.gms.common.api.GoogleApiClient.ConnectionCallbacks;
+import com.google.android.gms.common.api.GoogleApiClient.OnConnectionFailedListener;
+import com.google.android.gms.location.LocationServices;
 import co.jola.jola.apis.API;
+import co.jola.jola.apis.API_Keys;
 import co.jola.jola.apis.BraintreeAPI;
 import co.jola.jola.apis.UberAPI;
+import co.jola.jola.apis.Yelp;
 import co.jola.jola.apis.YelpAPI;
 
-public class MainActivity extends Activity implements OnClickListener {
+public class MainActivity extends Activity implements OnClickListener, ConnectionCallbacks, OnConnectionFailedListener {
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        mGoogleApiClient.connect();
+    }
+
+    @Override
+    protected void onStop() {
+        mGoogleApiClient.disconnect();
+        super.onStop();
+    }
+
+    @Override
+    public void onConnected(Bundle bundle) {
+
+    }
+
+    @Override
+    public void onConnectionSuspended(int i) {
+
+    }
+
+    @Override
+    public void onConnectionFailed(ConnectionResult connectionResult) {
+
+    }
 
     private enum Status {
         NULL,
@@ -50,6 +82,9 @@ public class MainActivity extends Activity implements OnClickListener {
     private API invoked;
     private Status status;
 
+    private final static int PLAY_SERVICES_RESOLUTION_REQUEST = 1000;
+    private GoogleApiClient mGoogleApiClient;
+
     @TargetApi(Build.VERSION_CODES.M)
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -57,55 +92,20 @@ public class MainActivity extends Activity implements OnClickListener {
         Firebase.setAndroidContext(this);
         Firebase ref = new Firebase("https://jola.firebaseio.com/");
         setContentView(R.layout.activity_main);
+
+         mGoogleApiClient = new GoogleApiClient.Builder(this)
+                .addConnectionCallbacks(this)
+                .addOnConnectionFailedListener(this)
+                .addApi(LocationServices.API)
+                .build();
+
         mText = (TextView) findViewById(R.id.textView1);
-        jolaspeaks = new TextToSpeech(getApplicationContext(), new TextToSpeech.OnInitListener() {
-            @Override
-            public void onInit(int status) {
-                jolaspeaks.setLanguage(Locale.US);
-            }
-        }
-        );
         this.userLocation = null;
         this.status = Status.NULL;
-
-        // set up location monitoring
-        // Acquire a reference to the system Location Manager
-        this.locationManager = (LocationManager) this.getSystemService(Context.LOCATION_SERVICE);
-
-        // Define a listener that responds to location updates
-        LocationListener locationListener = new LocationListener() {
-            public void onLocationChanged(Location location) {
-                // Called when a new location is found by the network location provider.
-                MainActivity.this.userLocation = location;
-            }
-
-            public void onStatusChanged(String provider, int status, Bundle extras) {}
-
-            public void onProviderEnabled(String provider) {}
-
-            public void onProviderDisabled(String provider) {}
-        };
-
-        // Register the listener with the Location Manager to receive location updates
-//        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-//            // TODO: Consider calling
-//            //    public void requestPermissions(@NonNull String[] permissions, int requestCode)
-//            // here to request the missing permissions, and then overriding
-//            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-//            //                                          int[] grantResults)
-//            // to handle the case where the user grants the permission. See the documentation
-//            // for Activity#requestPermissions for more details.
-//            return;
-//        }
-        locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 0, 0, locationListener);
-
-        sr = SpeechRecognizer.createSpeechRecognizer(this);
         intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
         intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
         intent.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, "co.jola.jola");
         intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 0);
-        sr.setRecognitionListener(new listener());
-//        sr.startListening(intent);
         userRequest = "";
     }
 
@@ -113,7 +113,8 @@ public class MainActivity extends Activity implements OnClickListener {
     public void onPause() {
         super.onPause();
 
-        sr.stopListening();
+        jolaspeaks.shutdown();
+        sr.destroy();
         Log.d(TAG, "activity paused - stop listening");
     }
 
@@ -121,7 +122,26 @@ public class MainActivity extends Activity implements OnClickListener {
     public void onResume() {
         super.onResume();
 
-        sr.startListening(intent);
+        jolaspeaks = new TextToSpeech(getApplicationContext(), new TextToSpeech.OnInitListener() {
+            @Override
+            public void onInit(int status) {
+                jolaspeaks.setLanguage(Locale.US);
+            }
+        });
+        if (sr != null) {
+            sr.cancel();
+            sr.destroy();
+            sr = null;
+        }
+        mText.post(new Runnable() {
+            @Override
+            public void run() {
+                sr = SpeechRecognizer.createSpeechRecognizer(MainActivity.this);
+                sr.setRecognitionListener(new listener());
+                sr.startListening(intent);
+            }
+        });
+
         Log.d(TAG, "activity resumed - listening");
     }
 
@@ -206,29 +226,35 @@ public class MainActivity extends Activity implements OnClickListener {
                 }
 
                 // -- Braintree
-                else if(BraintreeAPI.BraintreeMatch(userRequest)) {
+                else if (BraintreeAPI.BraintreeMatch(userRequest)) {
                     // do braintree stuff
                     BraintreeAPI braintree = new BraintreeAPI();
                     i = braintree.execute();
                 }
 
                 // -- Yelp
-                else if(YelpAPI.YelpMatch(userRequest)) {
-                    // do yelp stuff
-                    YelpAPI yelp = new YelpAPI();
-                    i = yelp.execute();
-                }
+                else if (YelpAPI.YelpMatch(userRequest)) {
+                    Log.d(TAG, "Looking for food...");
+                    API_Keys api_keys = new API_Keys();
+                    Log.i(TAG, "location is -----" +userLocation);
+                  new MyTask(MainActivity.this, userLocation, api_keys).execute();
+                    Log.e(TAG, "before that if statement");
 
-                if(i != null) {
-                    startActivity(i);
+                    // i always false
+                    if (i != null) {
+                        Log.e(TAG, "starting an Activity??");
+                        startActivity(i);
+                    }
                 }
-            } else if(spoken.equals("no")){
-                jolaspeaks.speak("Please repeat your request.", TextToSpeech.QUEUE_FLUSH, null);
+            } else if (spoken.equals("no")) {
+                    jolaspeaks.speak("Please repeat your request.", TextToSpeech.QUEUE_FLUSH, null);
             } else {
-                jolaspeaks.speak("I heard " + spoken + ", is that correct?", TextToSpeech.QUEUE_FLUSH, null);
-                userRequest = spoken;
+                    jolaspeaks.speak("I heard " + spoken + ", is that correct?", TextToSpeech.QUEUE_FLUSH, null);
+                    userRequest = spoken;
             }
-            while(jolaspeaks.isSpeaking());
+            Log.e(TAG, "about to go into the while loop");
+            while (jolaspeaks.isSpeaking()) ;
+            Log.e(TAG, "about to start listening again");
             sr.startListening(intent);
             Log.d(TAG, "jola is listening");
         }
@@ -277,5 +303,48 @@ public class MainActivity extends Activity implements OnClickListener {
         }
 
         return super.onOptionsItemSelected(item);
+    }
+
+    private static class MyTask extends AsyncTask<Void, Void, String> {
+
+        WeakReference<Activity> mWeakRef;
+        Location mLocation;
+        API_Keys mKeys;
+
+        public MyTask(Activity activity, Location userLocation, API_Keys keys) {
+            mWeakRef = new WeakReference<Activity>(activity);
+            mLocation = userLocation;
+            mKeys = keys;
+        }
+
+        @Override
+        protected String doInBackground(Void... voids) {
+            Yelp yelp = new Yelp(mKeys.getYelpConsumerKey(), mKeys.getYelpConsumerSecret(),
+              mKeys.getYelpToken(), mKeys.getYelpTokenSecret());
+            return yelp.search("burritos", mLocation.getLatitude(), mLocation.getLongitude());
+        }
+
+        @Override
+        protected void onPostExecute(String s) {
+            super.onPostExecute(s);
+
+            /*YelpParser yParser = new YelpParser();
+            Log.d(TAG, "Enters parser...");
+            yParser.setResponse(s);
+            try {
+                yParser.parseBusiness();
+            } catch (JSONException e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+                Log.d(TAG, "Failed to get restaurants");
+                //Do whatever you want with the error, like throw a Toast error report
+            }
+
+            int k = 0;
+            String mobile_url = yParser.getBusinessMobileURL(k);
+            String rating_url = yParser.getRatingURL(k);
+            String b_name = yParser.getBusinessName(k);
+            Log.d(TAG, "Yelp result: " + mobile_url + rating_url + b_name);*/
+        }
     }
 }
